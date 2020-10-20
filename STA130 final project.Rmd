@@ -1,0 +1,633 @@
+---
+title: "Hazardous Areas in Canada"
+subtitle: "STA130 Final Project"
+author: "**Zhenyu Xuan** (1004147568), **Ruei-hung Chen** (1004096006), **Ziyang Li** (1004205852), **Xuechun Qian** (1004064111), Tutorial Section: *0101E*, Group Number: *E1*"
+date: "Winter 2018"
+output:
+  ioslides_presentation:
+    widescreen: yes
+---
+
+output:
+  widescreen: true
+  ioslides_presentation: default
+  beamer_presentation: default
+  html_document:
+    df_print: paged
+
+```{r, echo=F, message=F, warning=F}
+# required packages
+library(tidyverse)
+library(dplyr)
+library(ggmap)
+library(knitr)
+library(gdata)
+```
+
+
+
+## Introduction:
+
+- <font size="5"> ***Definition***: The provinces in Canada which have SeverityScores greater than the *mean* of SeverityScore are considered to be hazardous areas.</font>
+- <font size="5">**Based on our definition**: we believe the province with the <span style="color:red">greatest median</span> of SeverityScore is the most hazardous.</font>
+- <font size="4">Methods: **qmplot()**</font>
+<h3 style="text-align: center;" markdown="1"><font size="4.5">Accident distribution in Canada:</font></h3>
+```{r, fig.width = 8, fig.asp=0.5, fig.align='center',echo=F, message=F, warning=F}
+file_url <- "https://raw.githubusercontent.com/ntaback/UofT_STA130/master/project/hazardousdriving.csv"
+hazardousdriving <- read.csv(file_url)
+hazardousdriving_can <- hazardousdriving %>% filter(Country == "Canada")
+qmplot(AvgLongitude, AvgLatitude, data = hazardousdriving_can, maptype ="toner-lite", color = I("red"))
+```
+
+
+## Methods:
+- 1.) **To understand the data**: 
+- <font size="4">Examine a new dataframe that only contains the provinces in Canada.</font> 
+- <font size="4">Analyze a new dataframe that only contains the provinces with the SeverityScore greater than the mean of the SeverityScore among Canada.</font> 
+- 2.) **Hypothesis Test**: <font size="4">Compare the differences between provinces.</font>
+- 3.) **Sampling distribution**: <font size="4">Simulate possible values (5000 times) of the test statistic.</font> 
+- 4.) **Regression Model**: <font size="4">Evaluate the relationship SeverityScore, trucks and percentage of heavy duty trucks.</font> 
+- 5.) **Outside data**: <font size="4">Assess the percentage of heavy duty trucks among all registered vehicles.</font> 
+
+
+<font size="3">Citation:</font> 
+<font size="1">1) geotab: Hazardous Driving Area. (n.d.). Retrieved March 31, 2018, from https://data.geotab.com/urban-infrastructure/hazardous-driving</font> 
+<font size="1">2)STat canada 1: (2017, June 29). Retrieved March 31, 2018, from http://www5.statcan.gc.ca/cansim/a26?lang=eng&retrLang=eng&id=4050004&&pattern=&stByVal=1&p1=1&p2=37&tabMode=dataTable&csid=</font> 
+<font size="1">3)MOOSE:  Moose Statistics. (n.d.). Retrieved March 31, 2018, from http://sopacnl.com/statistics/</font> 
+    
+
+## Defining hazardous driving: 
+
+SeverityScore Range:
+```{r, echo=F, message=F, warning=F}
+# get range of SeverityScore
+all_severity_score <-  hazardousdriving_can %>% select(SeverityScore)
+range(all_severity_score)
+```
+
+<h3 style="text-align: center;" markdown="1">**Distribution of SeverityScores in Canada.**</h3>
+```{r, fig.height = 3, fig.align='center', echo=F, message=F, warning=F}
+# mean of SeverityScore 
+mean_severityscore <- hazardousdriving_can %>% summarize(mean(SeverityScore))
+# histogram of SeverityScore
+ggplot(hazardousdriving_can, aes(x=SeverityScore))+ geom_histogram(binwidth = 0.3)+ labs(x ="Severity_score") + geom_vline(xintercept = 0.0912, color="red")
+```
+- *Red line*: The mean of SeverityScore *<span style="color:red">0.0912</span>*.
+
+## The Boxplot Distribution of SeverityScore
+
+- Numerical variable: *<span style="color:red">SeverityScore</span>*
+- categorical variable: *<span style="color:red">State</span>*
+
+```{r, fig.height = 3,fig.align='center', echo=F, message=F, warning=F}
+#boxplot of severity score distribution of each province.
+selected_data <- hazardousdriving_can %>% filter(SeverityScore >= mean_severityscore)
+selected_data %>% ggplot(aes(x= State, y = log(SeverityScore))) + geom_boxplot(alpha = 0.5) + coord_flip()
+```
+
+- **Filter()** only the accidents with SeverityScore greater than the mean SeverityScore.
+- Used **Log()** and **coord_flip()** to transform data.
+
+##A summary of median, mean, maximum, and minimum values
+```{r, results='asis',echo=F, message=F, warning=F,fig.cap = "test cap"}
+a_summary <- hazardousdriving_can %>% group_by(State) %>% summarize(median = median(SeverityScore), mean = mean(SeverityScore), max = max(SeverityScore), min = min(SeverityScore), N= n())
+kable(a_summary[1:7, ])
+
+```
+
+## 
+```{r, results='asis',echo=F, message=F, warning=F,fig.cap = "test cap"}
+a_summary <- hazardousdriving_can %>% group_by(State) %>% summarize(median = median(SeverityScore), mean = mean(SeverityScore), max = max(SeverityScore), min = min(SeverityScore), N= n())
+kable(a_summary[8:10, ])
+
+```
+
+- <font size="4"> **Newfoundland and labrador** has the highest median of <span style="color:blue">0.108</span></font> 
+- <font size="4"> **Saskatchewan** has the highest mean of <span style="color:blue">0.439</span></font> 
+ 
+- We target the most hazardous province based on <span style="color:red">*medians*</span>, because means are susceptible to extreme values.
+- However, our sampling distribution is based on <span style="color:red">*means*</span>. Because each province has different sample size, median is not suitable.
+
+## Sampling Distribution 1:
+<h3 style="text-align: center;" markdown="1">**Newfoundland Vs. Alberta**</h3>
+<h3 style="text-align: center;" markdown="1"><font size="4"> $H_0: {\mu}_{nfl} = {\mu}_{alberta}$ &nbsp;&nbsp;&nbsp;&nbsp; $H_a: {\mu}_{nfl} \ne {\mu}_{alberta}$</font></h3>
+<h3 style="text-align: center;" markdown="1"><font size="4">$\mbox{Test statistic} = \hat{\mu}_{nfl} - \hat{\mu}_{alberta} = 0.272-0.109 = 0.163$</font></h3>
+```{r, fig.height = 3, fig.align='center',echo=F, message=F, warning=F}
+# sampling distribution 1 (NFL and Alberta): 
+#H0: u NFL = uAlb
+#Ha: u NFL != uAlb
+target1 <- c("Newfoundland and Labrador", "Alberta")
+data1 <- hazardousdriving_can %>% filter(State %in% target1) %>% select (State, SeverityScore)
+  
+set.seed(852)
+repetitions_1 <- 10
+simulated_stat_1 <- rep (NA, repetitions_1)
+
+mean_nfl <- 0.272
+mean_alberta <- 0.109
+
+test_stat_1 <- mean_nfl - mean_alberta
+# 0.163
+
+for(i in 1:repetitions_1)
+{
+  sim1 <- data1 %>% mutate(State = sample(State))
+  sim_test_stat_1 <- sim1 %>% group_by(State) %>% summarise(means1 = mean(SeverityScore)) %>% summarise(sim_test_stat_1 = diff(means1))
+  simulated_stat_1[i] <- as.numeric(sim_test_stat_1)
+}
+
+sim_1 <- data_frame(mean_diff_1 = simulated_stat_1 )
+ggplot(sim_1, aes(x=mean_diff_1)) +geom_histogram(binwidth = 0.01) + geom_vline(xintercept= test_stat_1, color = "red") + geom_vline(xintercept= - test_stat_1, color = "blue") + labs(x="Simulated values of means (Alberta)")
+
+mean_diff_1 <- sim_1 %>% filter(mean_diff_1 >= test_stat_1 | mean_diff_1 <= -test_stat_1) %>% summarise(p_value_1 = n() / repetitions_1)
+```
+- <font size="5">*P-value = <span style="color:blue">0.0144</span>*</font>
+
+
+## Sampling Distribution 2:
+<h3 style="text-align: center;" markdown="1">**Newfoundland Vs. British Columbia**</h3>
+<h3 style="text-align: center;" markdown="1"><font size="4"> $H_0: {\mu}_{nfl} = {\mu}_{bc}$ &nbsp;&nbsp;&nbsp;&nbsp; $H_a: {\mu}_{nfl} \ne {\mu}_{bc}$</font></h3>
+<h3 style="text-align: center;" markdown="1"><font size="4">$\mbox{Test statistic} = \hat{\mu}_{nfl} - \hat{\mu}_{bc} = 0.272-0.066 = 0.206$</font></h3>
+
+```{r, fig.height = 3, fig.align='center',echo=F, message=F, warning=F}
+#H0: uNFL = uBC
+#Ha: uNFL != uBC
+target2 <- c("Newfoundland and Labrador", "British Columbia")
+data2 <- hazardousdriving_can %>% filter(State %in% target2) %>% select (State, SeverityScore)
+
+set.seed(852)
+repetitions_2 <- 10
+simulated_stat_2 <- rep(NA, repetitions_2)
+mean_nfl <- 0.272
+mean_British_Columbia <- 0.066
+
+test_stat_2 <- mean_nfl - mean_British_Columbia
+# [1] 0.206
+
+for (i in 1:repetitions_2)
+{
+  sim_2 <- data2 %>% mutate(State= sample(State))
+  sim_test_stat_2 <- sim_2 %>% group_by(State) %>% summarise(means2 = mean(SeverityScore)) %>% summarise(sim_test_stat_2 = diff(means2))
+  simulated_stat_2[i] <- as.numeric((sim_test_stat_2))
+}
+
+sim_2 <- data_frame(mean_diff_2 = simulated_stat_2 )
+
+ggplot(sim_2, aes(x=mean_diff_2)) +geom_histogram(binwidth = 0.01) + geom_vline(xintercept= test_stat_2, color = "red") + geom_vline(xintercept= - test_stat_2, color = "blue") + labs(x="Simulated values of means (British Columbia)")
+mean_diff_2 <- sim_2 %>% filter(mean_diff_2 >= test_stat_2 | mean_diff_2 <= -test_stat_2) %>% summarise(p_value_2 = n() / repetitions_2)
+```
+- <font size="5">*P-value = <span style="color:blue">0.0</span>*</font>
+
+## Sampling Distribution 3:
+<h3 style="text-align: center;" markdown="1">**Newfoundland Vs. Manitoba**</h3>
+<h3 style="text-align: center;" markdown="1"><font size="4"> $H_0: {\mu}_{nfl} = {\mu}_{mb}$ &nbsp;&nbsp;&nbsp;&nbsp; $H_a: {\mu}_{nfl} \ne {\mu}_{mb}$</font></h3>
+<h3 style="text-align: center;" markdown="1"><font size="4">$\mbox{Test statistic} = \hat{\mu}_{nfl} - \hat{\mu}_{mb} = 0.272-0.086 = 0.186$</font></h3>
+
+```{r, fig.height = 3, fig.align='center',echo=F, message=F, warning=F}
+#sampling distribution 3 
+#H0: uNFL = uMB
+#Ha: uNFL != uMB
+target3 <- c("Newfoundland and Labrador", "Manitoba")
+data3 <- hazardousdriving_can %>% filter(State %in% target3) %>% select (State, SeverityScore)
+
+set.seed(852)
+repetitions_3 <- 10
+simulated_stat_3 <- rep(NA, repetitions_3)
+mean_nfl <- 0.272
+mean_mb <- 0.086
+
+test_stat_3 <- mean_nfl - mean_mb
+#[1] 0.186
+
+for (i in 1:repetitions_3)
+{
+  sim_3 <- data3 %>% mutate(State= sample(State))
+  sim_test_stat_3 <- sim_3 %>% group_by(State) %>% summarise(means3 = mean(SeverityScore)) %>% summarise(sim_test_stat_3 = diff(means3))
+  simulated_stat_3[i] <- as.numeric((sim_test_stat_3))
+}
+
+sim_3 <- data_frame(mean_diff_3 = simulated_stat_3 )
+ggplot(sim_3, aes(x=mean_diff_3)) +geom_histogram(binwidth = 0.01) + geom_vline(xintercept= test_stat_3, color = "red") + geom_vline(xintercept= - test_stat_3, color = "blue") + labs(x="Simulated values of means (Manitoba)")
+
+mean_diff_3 <- sim_3 %>% filter(mean_diff_3 >= test_stat_3 | mean_diff_3 <= -test_stat_3) %>% summarise(p_value_3 = n() / repetitions_3)
+```
+- <font size="5">*P-value = <span style="color:blue">0.0</span>*</font>
+
+## Sampling Distribution 4:
+<h3 style="text-align: center;" markdown="1">**Newfoundland Vs. New Brunswick**</h3>
+<h3 style="text-align: center;" markdown="1"><font size="4"> $H_0: {\mu}_{nfl} = {\mu}_{nb}$ &nbsp;&nbsp;&nbsp;&nbsp; $H_a: {\mu}_{nfl} \ne {\mu}_{nb}$</font></h3>
+<h3 style="text-align: center;" markdown="1"><font size="4">$\mbox{Test statistic} = \hat{\mu}_{nfl} - \hat{\mu}_{nb} = 0.272-0.130 = 0.142$</font></h3>
+
+```{r, fig.height = 3, fig.align='center',echo=F, message=F, warning=F}
+#H0: u NFL = uNB
+#Ha: u NFL != uNB
+target4 <- c("Newfoundland and Labrador", "New Brunswick")
+data4 <- hazardousdriving_can %>% filter(State %in% target4) %>% select (State, SeverityScore)
+
+set.seed(852)
+repetitions_4 <- 10
+simulated_stat_4 <- rep (NA, repetitions_4)
+
+mean_nfl <- 0.272
+mean_NB <- 0.130
+test_stat_4 <- mean_nfl - mean_NB
+
+for(i in 1:repetitions_4)
+{
+  sim4 <- data4 %>% mutate(State = sample(State))
+  sim_test_stat_4 <- sim4 %>% group_by(State) %>% summarise(means4 = mean(SeverityScore)) %>% summarise(sim_test_stat_4 = diff(means4))
+  simulated_stat_4[i] <- as.numeric(sim_test_stat_4)
+}
+
+sim_4 <- data_frame(mean_diff_4 = simulated_stat_4 )
+ggplot(sim_4, aes(x=mean_diff_4)) +geom_histogram(binwidth = 0.01) + geom_vline(xintercept= test_stat_4, color = "red") + geom_vline(xintercept= - test_stat_4, color = "blue") + labs(x="Simulated values of means (New Brunswick)")
+
+mean_diff_4 <- sim_4 %>% filter(mean_diff_4 >= test_stat_4 | mean_diff_4 <= -test_stat_4) %>% summarise(p_value_4 = n() / repetitions_4)
+```
+- <font size="5">*P-value = <span style="color:blue">0.0347</span>*</font>
+
+## Sampling Distribution 5:
+<h3 style="text-align: center;" markdown="1">**Newfoundland Vs. Nova Scotia**</h3>
+<h3 style="text-align: center;" markdown="1"><font size="4"> $H_0: {\mu}_{nfl} = {\mu}_{ns}$ &nbsp;&nbsp;&nbsp;&nbsp; $H_a: {\mu}_{nfl} \ne {\mu}_{ns}$</font></h3>
+<h3 style="text-align: center;" markdown="1"><font size="4">$\mbox{Test statistic} = \hat{\mu}_{nfl} - \hat{\mu}_{ns} = 0.272-0.060 = 0.212$</font></h3>
+
+```{r, fig.height = 3, fig.align='center',echo=F, message=F, warning=F}
+# sampling distribution 5 (NFL and Nova Scotia): 
+#H0: u NFL = uNS
+#Ha: u NFL != uNS
+
+target5 <- c("Newfoundland and Labrador", "Nova Scotia")
+data5 <- hazardousdriving_can %>% filter(State %in% target5) %>% select (State, SeverityScore)
+  
+set.seed(852)
+repetitions_5 <- 10
+simulated_stat_5 <- rep (NA, repetitions_5)
+
+mean_nfl <- 0.272
+mean_ns <- 0.060
+
+test_stat_5 <- mean_nfl - mean_ns
+# 0.212
+
+for(i in 1:repetitions_5)
+{
+  sim5 <- data5 %>% mutate(State = sample(State))
+  sim_test_stat_5 <- sim5 %>% group_by(State) %>% summarise(means5 = mean(SeverityScore)) %>% summarise(sim_test_stat_5 = diff(means5))
+  simulated_stat_5[i] <- as.numeric(sim_test_stat_5)
+}
+
+sim_5 <- data_frame(mean_diff_5 = simulated_stat_5)
+ggplot(sim_5, aes(x=mean_diff_5)) +geom_histogram(binwidth = 0.01) + geom_vline(xintercept= test_stat_5, color = "red") + geom_vline(xintercept= - test_stat_5, color = "blue") + labs(x="Simulated values of means (Nova Scotia)")
+
+mean_diff_5 <- sim_5 %>% filter(mean_diff_5 >= test_stat_5 | mean_diff_5 <= -test_stat_5) %>% summarise(p_value_5 = n() / repetitions_5)
+```
+- <font size="5">*P-value = <span style="color:blue">0.0</span>*</font>
+
+## Sampling Distribution 6:
+<h3 style="text-align: center;" markdown="1">**Newfoundland Vs. Ontario**</h3>
+<h3 style="text-align: center;" markdown="1"><font size="4"> $H_0: {\mu}_{nfl} = {\mu}_{on}$ &nbsp;&nbsp;&nbsp;&nbsp; $H_a: {\mu}_{nfl} \ne {\mu}_{on}$</font></h3>
+<h3 style="text-align: center;" markdown="1"><font size="4">$\mbox{Test statistic} = \hat{\mu}_{nfl} - \hat{\mu}_{on} = 0.272-0.081 = 0.191$</font></h3>
+
+```{r, fig.height = 3, fig.align='center',echo=F, message=F, warning=F}
+#H0: u NFL = uON
+#Ha: u NFL != uON
+target6 <- c("Newfoundland and Labrador", "Ontario")
+data6 <- hazardousdriving_can %>% filter(State %in% target6) %>% select (State, SeverityScore)
+  
+set.seed(852)
+repetitions_6 <- 10
+simulated_stat_6 <- rep (NA, repetitions_6)
+
+mean_nfl <- 0.272
+mean_ontario <- 0.081
+
+test_stat_6 <- mean_nfl - mean_ontario
+# 0.191
+
+for(i in 1:repetitions_6)
+{
+  sim6 <- data6 %>% mutate(State = sample(State))
+  sim_test_stat_6 <- sim6 %>% group_by(State) %>% summarise(means6 = mean(SeverityScore)) %>% summarise(sim_test_stat_6 = diff(means6))
+  simulated_stat_6[i] <- as.numeric(sim_test_stat_6)
+}
+
+sim_6 <- data_frame(mean_diff_6 = simulated_stat_6 )
+
+ggplot(sim_6, aes(x=mean_diff_6)) +geom_histogram(binwidth = 0.01) + geom_vline(xintercept= test_stat_6, color = "red") + geom_vline(xintercept= - test_stat_6, color = "blue") + labs(x="Simulated values of means(Ontario)")
+
+
+mean_diff_6 <- sim_6 %>% filter(mean_diff_6 >= test_stat_6 | mean_diff_6 <= -test_stat_6) %>% summarise(p_value_6 = n() / repetitions_6)
+```
+- <font size="5">*P-value = <span style="color:blue">6e-04</span>*</font>
+
+## Sampling Distribution 7:
+<h3 style="text-align: center;" markdown="1">**Newfoundland Vs. Prince Edward Island**</h3>
+<h3 style="text-align: center;" markdown="1"><font size="4"> $H_0: {\mu}_{nfl} = {\mu}_{pei}$ &nbsp;&nbsp;&nbsp;&nbsp; $H_a: {\mu}_{nfl} \ne {\mu}_{pei}$</font></h3>
+<h3 style="text-align: center;" markdown="1"><font size="4">$\mbox{Test statistic} = \hat{\mu}_{nfl} - \hat{\mu}_{pei} = 0.272-0.091 = 0.181$</font></h3>
+
+```{r, fig.height = 3, fig.align='center',echo=F, message=F, warning=F}
+#H0: u NFL = uPEI
+#Ha: u NFL != uPEI
+target7 <- c("Newfoundland and Labrador", "Prince Edward Island")
+data7 <- hazardousdriving_can %>% filter(State %in% target7) %>% select (State, SeverityScore)
+  
+set.seed(852)
+repetitions_7 <- 10
+simulated_stat_7 <- rep (NA, repetitions_7)
+
+mean_nfl <- 0.272
+mean_pei <- 0.091
+
+test_stat_7 <- mean_nfl - mean_pei
+for(i in 1:repetitions_7)
+{
+  sim7 <- data7 %>% mutate(State = sample(State))
+  sim_test_stat_7 <- sim7 %>% group_by(State) %>% summarise(means7 = mean(SeverityScore)) %>% summarise(sim_test_stat_7 = diff(means7))
+  simulated_stat_7[i] <- as.numeric(sim_test_stat_7)
+}
+
+sim_7 <- data_frame(mean_diff_7 = simulated_stat_7 )
+
+ggplot(sim_7, aes(x=mean_diff_7)) +geom_histogram(binwidth = 0.01) + geom_vline(xintercept= test_stat_7, color = "red") + geom_vline(xintercept= - test_stat_7, color = "blue") + labs(x="Simulated values of means(Prince Edward Island)")
+
+
+mean_diff_7 <- sim_7 %>% filter(mean_diff_7 >= test_stat_7 | mean_diff_7 <= -test_stat_7) %>% summarise(p_value_7 = n() / repetitions_7)
+```
+- <font size="5">*P-value = <span style="color:blue">0.4236</span>*</font>
+
+## Sampling Distribution 8:
+<h3 style="text-align: center;" markdown="1">**Newfoundland Vs. Quebec**</h3>
+<h3 style="text-align: center;" markdown="1"><font size="4"> $H_0: {\mu}_{nfl} = {\mu}_{qc}$ &nbsp;&nbsp;&nbsp;&nbsp; $H_a: {\mu}_{nfl} \ne {\mu}_{qc}$</font></h3>
+<h3 style="text-align: center;" markdown="1"><font size="4">$\mbox{Test statistic} = \hat{\mu}_{nfl} - \hat{\mu}_{qc} = 0.272-0.036 = 0.236$</font></h3>
+
+```{r, fig.height = 3, fig.align='center',echo=F, message=F, warning=F}
+#H0: u NFL = uqb
+#Ha: u NFL != uqb
+target8 <- c("Newfoundland and Labrador", "Quebec")
+data8 <- hazardousdriving_can %>% filter(State %in% target8) %>% select (State, SeverityScore)
+  
+set.seed(852)
+repetitions_8 <- 10
+simulated_stat_8 <- rep (NA, repetitions_8)
+
+mean_nfl <- 0.272
+mean_qc <- 0.036
+
+test_stat_8 <- mean_nfl - mean_qc
+# 0.236
+
+for(i in 1:repetitions_8)
+{
+  sim8 <- data8 %>% mutate(State = sample(State))
+  sim_test_stat_8 <- sim8 %>% group_by(State) %>% summarise(means8 = mean(SeverityScore)) %>% summarise(sim_test_stat_8 = diff(means8))
+  simulated_stat_8[i] <- as.numeric(sim_test_stat_8)
+}
+
+sim_8 <- data_frame(mean_diff_8 = simulated_stat_8 )
+
+ggplot(sim_8, aes(x=mean_diff_8)) +geom_histogram(binwidth = 0.01) + geom_vline(xintercept= test_stat_8, color = "red") + geom_vline(xintercept= - test_stat_8, color = "blue") + labs(x="Simulated values of means(Quebec)")
+
+
+mean_diff_8 <- sim_8 %>% filter(mean_diff_8 >= test_stat_8 | mean_diff_8 <= -test_stat_8) %>% summarise(p_value_8 = n() / repetitions_8)
+```
+- <font size="5">*P-value = <span style="color:blue">0.0014</span>*</font>
+
+## Sampling Distribution 9:
+<h3 style="text-align: center;" markdown="1">**Newfoundland Vs. Saskatchewan**</h3>
+<h3 style="text-align: center;" markdown="1"><font size="4"> $H_0: {\mu}_{nfl} = {\mu}_{sk}$ &nbsp;&nbsp;&nbsp;&nbsp; $H_a: {\mu}_{nfl} \ne {\mu}_{sk}$</font></h3>
+<h3 style="text-align: center;" markdown="1"><font size="4">$\mbox{Test statistic} = \hat{\mu}_{nfl} - \hat{\mu}_{sk} = 0.272-0.067 = 0.205$</font></h3>
+
+```{r, fig.height = 3, fig.align='center', echo=F, message=F, warning=F}
+#H0: u NFL = usk
+#Ha: u NFL != usk
+target9 <- c("Newfoundland and Labrador", "Saskatchewan")
+data9 <- hazardousdriving_can %>% filter(State %in% target9) %>% select (State, SeverityScore)
+  
+set.seed(852)
+repetitions_9 <- 10
+simulated_stat_9 <- rep (NA, repetitions_9)
+
+mean_nfl <- 0.272
+mean_sk <- 0.067
+
+test_stat_9 <- mean_nfl - mean_sk
+# 0.205
+
+for(i in 1:repetitions_9)
+{
+  sim9 <- data9 %>% mutate(State = sample(State))
+  sim_test_stat_9 <- sim9 %>% group_by(State) %>% summarise(means9 = mean(SeverityScore)) %>% summarise(sim_test_stat_9 = diff(means9))
+  simulated_stat_9[i] <- as.numeric(sim_test_stat_9)
+}
+
+sim_9 <- data_frame(mean_diff_9 = simulated_stat_9 )
+
+ggplot(sim_9, aes(x=mean_diff_9)) +geom_histogram(binwidth = 0.01) + geom_vline(xintercept= test_stat_9) + geom_vline(xintercept= - test_stat_9) + labs(x="Simulated values of means(Quebec)")
+
+
+mean_diff_9 <- sim_9 %>% filter(mean_diff_9 >= test_stat_9 | mean_diff_9 <= -test_stat_9) %>% summarise(p_value_9 = n() / repetitions_9)
+```
+- <font size="5">*P-value = <span style="color:blue">0.2976</span>*</font>
+
+## Results: P-value of Newfoundland vs. provinces: 
+```{r, fig.height = 3, fig.align='center', echo=F, message=F, warning=F}
+province_name <-c("Alberta","British Columbia","Manitoba","New Brunswick","Nova Scotia"," Ontario","Prince Edward Island","Quebec","Saskatchewan")
+mean_diff <- c(0.0144,0.0,0.0, 0.0347,0.0,6e-04,0.4236,0.0014,0.2976)
+province_p_value <- data.frame(province = province_name, p_value = mean_diff)
+province_p_value
+```
+<font size="4.5">They all have p-value less than 0.05, which provides strong evidence against null hypothesis, **EXCEPT FOR**:</font>
+
+- <font size="4">1) *Prince Edward Island* has a comparative small sample size with only 2 observations, so it may explain why it has a p-value of **<span style="color:blue">0.4236</span>**. </font>
+
+- <font size="4"> 2) *Saskatchewan* has a p-value of <span style="color:blue">**0.2976**</span>, yet it has many high extreme values which does not accurately represente the mean of the whole province.</font>
+
+
+##Relationship between percentage of light duty truck and Number of Incidents
+- <font size="4.5">$\beta_0 =  0.111$ &nbsp;&nbsp;&nbsp;&nbsp; $\beta_1 = - 0.206$ </font>
+- Simple linear regression: <font size="4.5">$y_1 = 0.111 - 0.206x_1$</font>
+
+```{r, fig.height = 2,fig.align='center', echo=F, message=F, warning=F}
+# Estimate the slope of Ldt
+pct_ldt <- selected_data$LdtIncidents / selected_data$NumberIncidents
+mod_paper <- lm(SeverityScore ~ pct_ldt, data = selected_data)
+mod_paper_summary <- summary(mod_paper)
+mod_paper_summary$coefficients
+# y3=0.111-0.206x3
+selected_data %>% ggplot(aes(x= pct_ldt, y = SeverityScore)) + geom_point(alpha= 0.5) + geom_smooth(method = "lm", se = FALSE) + theme_minimal()
+```
+- <font size="4.5">Methods: **lm()**, **summary()**, **coefficients** to explore the linear regression model. **ggplot()**, **geom_point()**, and **geom_smooth()** to graph regression model. </font>
+
+
+##Relationship between percentage of medium duty truck and Number of Incidents
+- <font size="4.5">$\beta_0 = 0.0194$ &nbsp;&nbsp;&nbsp;&nbsp; $\beta_1 = -0.00298$</font>
+- Simple linear regression: <font size="4.5">$y_2 = 0.0194 - 0.00298x_2$</font>
+```{r, fig.height = 2,fig.align='center', echo=F, message=F, warning=F}
+# Estimate the slope of Mdt
+pct_mdt <- selected_data$MdtIncidents / selected_data$NumberIncidents
+mod_paper <- lm(SeverityScore ~ pct_mdt, data = selected_data)
+mod_paper_summary <- summary(mod_paper)
+mod_paper_summary$coefficients
+# y2=0.0914-0.00298x2
+selected_data %>% ggplot(aes(x= pct_mdt, y = SeverityScore)) + geom_point(alpha= 0.5) + geom_smooth(method = "lm", se = FALSE) + theme_minimal()
+
+```
+- <font size="4.5">Methods: **lm()**, **summary()**, **coefficients** to explore the linear regression model. **ggplot()**, **geom_point()**, and **geom_smooth()** to graph regression model. </font>
+
+
+##Relationship between percentage of heavy duty truck and Number of Incidents
+- <font size="4.5">$\beta_0 = 0.0194$ &nbsp;&nbsp;&nbsp;&nbsp; $\beta_1 =0.1326$</font>
+- Simple linear regression: <font size="4.5">$y_3 = 0.0194 + 0.1326x_3$</font>
+```{r, fig.height = 2,fig.align='center', echo=F, message=F, warning=F}
+## the r^2 is greater than the number we got with only one variable - HdtIncidents, then we can make a short conclusion that truck is a significant factor which can affect the level of hazardous.
+
+## Estimating the coefficients
+
+# Estimate the slope of Hdt
+pct_hdt <- selected_data$HdtIncidents / selected_data$NumberIncidents
+mod_paper <- lm(SeverityScore ~ pct_hdt, data = selected_data)
+mod_paper_summary <- summary(mod_paper)
+mod_paper_summary$coefficients
+# y1=0.0194+0.1326x1
+selected_data %>% ggplot(aes(x= pct_hdt, y = SeverityScore)) + geom_point(alpha= 0.5) + geom_smooth(method = "lm", se = FALSE) + theme_minimal()
+```
+- <font size="4.5">Methods: **lm()**, **summary()**, **coefficients** to explore the linear regression model. **ggplot()**, **geom_point()**, and **geom_smooth()** to graph regression model. </font>
+
+
+##Regression model:Percentage of Hdtincident and SeverityScore
+- <font size="4">$R^2$ from original data set:</font>
+```{r, fig.height = 3,fig.align='center', echo=F, message=F, warning=F}
+##WTS: is there a linear regression between percent of heavy duty trucks incidents and severityscore among those provinces have greater number of severityscore (greater than mean):
+selected_data <- hazardousdriving_can %>% filter(SeverityScore >= mean_severityscore)
+## Calculate the r squared
+##SeverityScore ~ HdtIncidents/NumberIncidents
+mod_paper <- lm(SeverityScore ~ HdtIncidents/NumberIncidents, data = selected_data)
+mod_paper_summary <- summary(mod_paper)
+
+mod_paper <- lm(SeverityScore ~ HdtIncidents/NumberIncidents, data = selected_data)
+mod_paper_summ <- summary(mod_paper)
+mod_paper_summ$r.squared
+## r squqre is around 0.134, which indicates a poor fit, then we need to use training and test set to promote our estimation.
+```
+- <font size="4.5">$R^2$ from using training and test set:</font>
+```{r, echo=F, message=F, warning=F}
+## Calculate the r squared using train and test set
+set.seed(4)
+selected_data_train <- selected_data %>%
+ mutate(id = row_number()) %>%
+ sample_frac(size = 0.1)
+selected_data_test <- selected_data %>%
+ mutate(id = row_number()) %>%
+ anti_join(selected_data_train, by = 'id')
+mod_train <- lm(SeverityScore ~ HdtIncidents/NumberIncidents, data = selected_data_train)
+mod_train_summ <- summary(mod_train)
+mod_train_summ$r.squared
+## r square even smaller, then we are going to using the original data
+```
+- <font size="4.5">Because $R^2$ decreased, we decided to add all types of trucks as independent factors. The $R^2$ becomes:</font>
+```{r, echo= F, message= F, warning= FALSE}
+## Adding other variables to the regression model to investigate if we can decrease the prediction error.
+mrmod_train <- lm(SeverityScore ~ HdtIncidents/NumberIncidents + MdtIncidents/NumberIncidents + LdtIncidents/NumberIncidents, data = selected_data)
+mrmod_train_summ <- summary(mrmod_train)
+mrmod_train_summ$r.squared
+# r squared is 0.145
+## the r^2 is greater than the number we got with only one variable - HdtIncidents, then we can make a short conclusion that truck is a significant factor which can affect the level of hazardous.
+```
+- Which leads us to the results that truck is an *insignificant* factor to level of hazardous 
+
+
+## Data from Statistics Canada:
+- The imported database contains vehicle registrations statistics in Canada.
+- <font size="4.5">**Variable used**: *Total vehicle registrations* and *registered Heavy duty truck*.</font> 
+```{r, fig.height = 3, fig.align='center', echo=F, message=F, warning=F}
+#import car registration data. 
+car_reg <- read_csv("car registration data.csv")
+car_reg <- car_reg %>% filter(Ref_Date == "2016") %>% select(Value, TYPE, REGION)
+
+car1 <- c("Total, road motor vehicle registrations", "Heavy duty truck (vehicles weighing 15,000 kilograms or more)")
+car_reg1 <- car_reg %>% filter(TYPE %in% car1)
+
+total_car <- car_reg1 %>% filter(TYPE == "Total, road motor vehicle registrations", REGION == "Canada") %>% select(Value)
+total_hdt <- car_reg1 %>% filter(TYPE == "Heavy duty truck (vehicles weighing 15,000 kilograms or more)", REGION == "Canada") %>% select(Value)
+total_pct_hdt <- as.numeric(total_hdt/ total_car)
+  
+alberta_total_car <- car_reg1 %>% filter(TYPE == "Total, road motor vehicle registrations", REGION == "Alberta") %>% select(Value)
+alberta_total_hdt <- car_reg1 %>% filter(TYPE == "Heavy duty truck (vehicles weighing 15,000 kilograms or more)", REGION == "Alberta") %>% select(Value)
+alberta_pct_hdt <- as.numeric(alberta_total_hdt/ alberta_total_car)
+
+bc_total_car <- car_reg1 %>% filter(TYPE == "Total, road motor vehicle registrations", REGION == "British Columbia") %>% select(Value)
+bc_total_hdt <- car_reg1 %>% filter(TYPE == "Heavy duty truck (vehicles weighing 15,000 kilograms or more)", REGION == "British Columbia") %>% select(Value)
+bc_pct_hdt <- as.numeric(bc_total_hdt/ bc_total_car)
+
+mt_total_car <- car_reg1 %>% filter(TYPE == "Total, road motor vehicle registrations", REGION == "Manitoba") %>% select(Value)
+mt_total_hdt <- car_reg1 %>% filter(TYPE == "Heavy duty truck (vehicles weighing 15,000 kilograms or more)", REGION == "Manitoba") %>% select(Value)
+mt_pct_hdt <- as.numeric(mt_total_hdt/ mt_total_car)
+
+nb_total_car <- car_reg1 %>% filter(TYPE == "Total, road motor vehicle registrations", REGION == "New Brunswick") %>% select(Value)
+nb_total_hdt <- car_reg1 %>% filter(TYPE == "Heavy duty truck (vehicles weighing 15,000 kilograms or more)", REGION == "New Brunswick") %>% select(Value)
+nb_pct_hdt <- as.numeric(nb_total_hdt/ nb_total_car)
+
+nfl_total_car <- car_reg1 %>% filter(TYPE == "Total, road motor vehicle registrations", REGION == "Newfoundland and Labrador") %>% select(Value)
+nfl_total_hdt <- car_reg1 %>% filter(TYPE == "Heavy duty truck (vehicles weighing 15,000 kilograms or more)", REGION == "Newfoundland and Labrador") %>% select(Value)
+nfl_pct_hdt <- as.numeric(nfl_total_hdt/ nfl_total_car)
+
+nv_total_car <- car_reg1 %>% filter(TYPE == "Total, road motor vehicle registrations", REGION == "Nova Scotia") %>% select(Value)
+nv_total_hdt <- car_reg1 %>% filter(TYPE == "Heavy duty truck (vehicles weighing 15,000 kilograms or more)", REGION == "Nova Scotia") %>% select(Value)
+nv_pct_hdt <- as.numeric(nv_total_hdt/ nv_total_car)
+
+on_total_car <- car_reg1 %>% filter(TYPE == "Total, road motor vehicle registrations", REGION == "Ontario") %>% select(Value)
+on_total_hdt <- car_reg1 %>% filter(TYPE == "Heavy duty truck (vehicles weighing 15,000 kilograms or more)", REGION == "Ontario") %>% select(Value)
+on_pct_hdt <- as.numeric(on_total_hdt/ on_total_car)
+
+pei_total_car <- car_reg1 %>% filter(TYPE == "Total, road motor vehicle registrations", REGION == "Prince Edward Island") %>% select(Value)
+pei_total_hdt <- car_reg1 %>% filter(TYPE == "Heavy duty truck (vehicles weighing 15,000 kilograms or more)", REGION == "Prince Edward Island") %>% select(Value)
+pei_pct_hdt <- as.numeric(pei_total_hdt/ pei_total_car)
+
+qb_total_car <- car_reg1 %>% filter(TYPE == "Total, road motor vehicle registrations", REGION == "Quebec") %>% select(Value)
+qb_total_hdt <- car_reg1 %>% filter(TYPE == "Heavy duty truck (vehicles weighing 15,000 kilograms or more)", REGION == "Quebec") %>% select(Value)
+qb_pct_hdt <- as.numeric(qb_total_hdt/ qb_total_car)
+
+sk_total_car <- car_reg1 %>% filter(TYPE == "Total, road motor vehicle registrations", REGION == "Saskatchewan") %>% select(Value)
+sk_total_hdt <- car_reg1 %>% filter(TYPE == "Heavy duty truck (vehicles weighing 15,000 kilograms or more)", REGION == "Saskatchewan") %>% select(Value)
+sk_pct_hdt <- as.numeric(sk_total_hdt/ sk_total_car)
+
+province_names <- c("Canada", "Alberta", "British Columbia", "Manitoba", "New Brunswick","Newfoundland and Labrador", "Nova Scotia", "Ontario", "Prince Edward Island", "Quebec", "Saskatchewan")
+overall_pct <- c(total_pct_hdt, alberta_pct_hdt, bc_pct_hdt,mt_pct_hdt, nb_pct_hdt, nfl_pct_hdt, nv_pct_hdt, on_pct_hdt, pei_pct_hdt, qb_pct_hdt, sk_pct_hdt)
+
+total_car_dataframe <- data.frame(Region = province_names, Percentage_of_heavey_duty_truck = overall_pct*100)
+
+ggplot(total_car_dataframe, aes(x= reorder(Region,Percentage_of_heavey_duty_truck), y = Percentage_of_heavey_duty_truck)) + geom_bar(stat ="identity")+ coord_flip() + labs(x ="Region")
+
+```
+- <font size="4.5">**Purpose** is to compare the percentage of registered heavy duty trucks in each province.</font>
+- <font size="4.5">**Finding**: Saskatchewan has the most percentage, which is approximatly 4.6%.</font> 
+- <font size="4.5">**Possible bias**: the imported database may not be comparable with the databased provided by GeoTab.</font>
+- <font size="4.5">**Methods**: **filter()** interested information, created a **data_frame()** and used **geom_bar()**.</font>
+
+
+## Closer look at Newfoundland:
+```{r, echo=F, out.width = "400px",message=F, warning=F}
+map_2 <- get_map(location = 'Grand Falls-Windsor', zoom = 7)
+hazardousdriving_nfl <- hazardousdriving_can %>% filter(State=="Newfoundland and Labrador")
+map_nfl <- ggmap(map_2) + geom_point(data = hazardousdriving_nfl, aes(x = AvgLongitude, y = AvgLatitude, alpha = 0.3, color = I("red")))
+map_nfl
+image2 <- knitr::include_graphics("http://sopacnl.com/sopac/wp-content/uploads/2011/04/moosemap.jpg")
+image2
+```
+
+- <font size="5">If heavy duty trucks do not contribute much to its high Severity score, what may be an possible reason?</font> 
+- <font size="4.5">Accidents in Newfoundland seem to mainly occur on highways, where exists many wild **mooses**.</font> 
+- <font size="4.5">**Save Our People Action Committee**: *"On average there are over 700 moose vehicle accidents in the province"*</font> 
+- <font size="4.5">**Statistics Canada**: *"Newfoundland animal-vehicle collisions are mostly moose-vehicle collisions "*</font> 
+- <font size="4.3">Methods: **get_map()**, **ggmap()**, **geom_point()** to create map, and **knitr()** to import web image.</font> 
+
+## Conclusion:
+- **Newfoundland** is the most hazardous province with the highest median SeverityScore (*Hypothesis Test*). 
+- Low $R^2$ shows that severity score cannot be predicted by truck types or by percentage of heavy duty trucks.
+- Outside data of moose accidents may explain the high severity score in NFL.
+
+<font size="6">**Challenges and limitation**</font>
+
+- Linear regression model is limited to linear correlations and sensitive to outliers.
+- More suitable data will be the trafic flow of truck instead of truck registration number.
+- Could not find the exact number of collisions on highways or moose vehicle collisions number.
